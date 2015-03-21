@@ -217,7 +217,7 @@
                         style="@style/ButtonLightController"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:id="@+id/gay_mode"
+                        android:id="@+id/cherry_mode"
                         android:text="Start Cherry Mode" />
 
                 </LinearLayout>
