@@ -32,6 +32,10 @@ import java.io.IOException;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import android.os.PowerManager;
+
 public class controlCommands {
     public static final int DISCOVERED_DEVICE = 111;
     public static final int LIST_WIFI_NETWORKS = 802;
@@ -46,11 +50,24 @@ public class controlCommands {
     public final int[] tolerance = new int[1];
     public SaveState appState = null;
 
+    public boolean paused = false;
+    public boolean[] looping = {false, false, false, false, false};
+    public boolean[] overlapping = {false, false, false, false, false};
+
+    public float BrightnessPercent = 1f;
+    
+    private PowerManager powerManager;
+    private PowerManager.WakeLock wakeLock;
+
     public controlCommands(Context context, Handler handler) {
         UDPC = new UDPConnection(context, handler);
         mContext = context;
         tolerance[0] = 25000;
         appState = new SaveState(context);
+
+        powerManager = (PowerManager) mContext.getSystemService(Context.POWER_SERVICE);
+        wakeLock = powerManager.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK,
+                "MyWakelockTag");
     }
 
     public void killUDPC() {
@@ -436,6 +453,8 @@ public class controlCommands {
         }
         LastBrightness = brightness;
         LastZone = zoneid;
+        
+        BrightnessPercent = (float) values[brightness] / 25;
     }
 
     public void startTimeout() {
@@ -651,5 +670,268 @@ public class controlCommands {
             e.printStackTrace();
         }
         return 0;
+    }
+
+    public void startFadeEffect(final int zoneid, final String effect) {
+        looping[zoneid] = true;
+        LightsOn(zoneid);
+        wakeLock.acquire();
+        
+        Thread thread = new Thread(new Runnable()
+        {
+            int fade_start;
+            int fade_end = -1;
+            int brightness_start;
+            int brightness_end;
+            int brightness;
+            int prev_brightness = -1;
+            double rand;
+
+            int color_range_min = 120;
+            int color_range_max = 210;
+            int brightness_range_min = 10;
+            int brightness_range_max = 100;
+            int interval = 500;
+            boolean smooth_brightness = true;
+            int max_brightness_spread = 100;
+            boolean overlap_effects = false;
+
+            public void run() {
+                try {
+                    int i = 0;
+                    if(effect == "aurora") {
+                        color_range_min = 80;
+                        color_range_max = 210;
+                        brightness_range_min = 60;
+                        brightness_range_max = 100;
+                        interval = 300;
+                        smooth_brightness = true;
+                        max_brightness_spread = 10;
+                        overlap_effects = false;
+                    } else if (effect == "fire") {
+                        color_range_min = 10;
+                        color_range_max = 30;
+                        brightness_range_min = 70;
+                        brightness_range_max = 100;
+                        interval = 100;
+                        smooth_brightness = false;
+                        max_brightness_spread = 100;
+                        overlap_effects = false;
+                    } else if (effect == "cherry") {
+                        color_range_min = 270;
+                        color_range_max = 300;
+                        brightness_range_min = 80;
+                        brightness_range_max = 100;
+                        interval = 600;
+                        smooth_brightness = true;
+                        max_brightness_spread = 10;
+                        overlap_effects = false;
+                    }
+
+                    int current_zone = zoneid;
+
+                    while(looping[current_zone]) {
+
+                        // We create an array of colors
+                        if(fade_end > 0) {
+                            fade_start = fade_end;
+                        } else {
+                            rand = (Math.random() * (color_range_max - color_range_min) + color_range_min);
+                            fade_start = (int) rand;
+                        }
+
+                        rand = (Math.random() * (color_range_max - color_range_min) + color_range_min);
+                        fade_end = (int) rand;
+
+                        if(fade_end == fade_start) {
+                            fade_end = fade_end + 1;
+                        }
+
+                        int color_min = Math.min(fade_start, fade_end);
+                        int color_max = Math.max(fade_start, fade_end);
+
+                        int colors_length = (color_max - color_min + 1);
+
+                        // We create an array of brightness levels
+                        if(brightness_end > 0) {
+                            brightness_start = brightness_end;
+                        } else {
+                            rand = (Math.random() * (brightness_range_max - brightness_range_min) + brightness_range_min);
+                            brightness_start = (int) rand;
+                        }
+
+                        rand = (Math.random() * (brightness_range_max - brightness_range_min) + brightness_range_min);
+                        brightness_end = (int) rand;
+
+                        if(brightness_end == brightness_start) {
+                            if(brightness_end < 100) {
+                                brightness_end = brightness_end + 1;
+                            } else {
+                                brightness_start = brightness_start - 1;
+                            }
+                        }
+
+                        if(smooth_brightness) {
+                            max_brightness_spread = Math.min((int) (colors_length * 1.5), max_brightness_spread); // At most we want the brightness to fade 1.5 times as fast than colors
+
+                            if (brightness_end > brightness_start) {
+                                brightness_end = Math.min(brightness_end, brightness_start + max_brightness_spread);
+                            } else {
+                                brightness_end = Math.max(brightness_end, brightness_start - max_brightness_spread);
+                            }
+                        }
+
+                        int brightness_min = Math.min(brightness_start, brightness_end);
+                        int brightness_max = Math.max(brightness_start, brightness_end);
+
+                        ArrayList<Integer> brightnesses = new ArrayList<Integer>();
+
+                        float brightness_steps = (float) (brightness_max - brightness_min) / colors_length;
+
+                        float b = (float) brightness_min;
+
+                        ArrayList<Integer> colors = new ArrayList<Integer>();
+
+                        for(i = color_min; i <= color_max; i += 1) {
+                            colors.add(i);
+                            brightnesses.add((int) b);
+                            b = b + brightness_steps;
+                        }
+
+                        if (fade_end < fade_start) {
+                            Collections.reverse(colors);
+                        }
+
+                        if (brightness_end < brightness_start) {
+                            Collections.reverse(brightnesses);
+                        }
+
+
+                        // We iterate through the color array and set colors + brightnesses
+                        final int split_interval = interval / 2;
+
+                        int index = 0;
+
+                        if(overlap_effects && !overlapping[current_zone]) {
+                            overlapping[current_zone] = true;
+                            TimeUnit.MILLISECONDS.sleep(split_interval / 2);
+                            startFadeEffect(current_zone, effect);
+                        } else if (!overlap_effects) {
+                            overlapping[current_zone] = false;
+                        }
+
+                        for(Integer color: colors){
+                            if(!looping[current_zone]) {
+                                break;
+                            }
+
+                            float hue = (float) color / 360;
+
+                            // String newColor = HSBtoRGB(hue, 1.0f, 1.0f);
+
+                            // String newColor = "#" + hsvToRgb((float) color, 1, 1);
+
+                            try {
+                                // setColor(current_zone, Color.parseColor(newColor));
+
+                                
+
+                                Float deg = (float) Math.toRadians(-color);
+                                Float dec = (deg/((float)Math.PI*2f))*255f;
+                                //rotation compensation
+                                dec = dec + 175;
+                                if(dec > 255) {
+                                    dec = dec - 255;
+                                }
+
+                                while(paused) {
+                                    TimeUnit.MILLISECONDS.sleep(10);
+                                }
+
+                                paused = true;
+                                int last_on = LastOn; // We need to reset this after changing colors
+                                if(last_on != current_zone) {
+                                    LightsOn(current_zone);
+                                }
+
+                                byte[] messageBA = new byte[3];
+                                messageBA[0] = 64;
+                                messageBA[1] = (byte) (float) (dec);
+                                messageBA[2] = 85;
+
+                                try {
+                                    UDPC.sendMessage(messageBA);
+                                } catch (IOException e) {
+                                    e.printStackTrace();
+                                    //add alert to tell user we cant send command
+                                }
+
+                                if(last_on != current_zone) {
+                                    LightsOn(last_on);
+                                }
+                                paused = false;
+
+                                appState.setColor(zoneid, color);
+
+                            } catch(IllegalArgumentException e) {
+
+                            }
+
+                            TimeUnit.MILLISECONDS.sleep(split_interval);
+
+                            try {
+                                if(brightnesses.get(index) > 0) {
+                                    brightness = (int) (BrightnessPercent * brightnesses.get(index) / 4);
+                                }
+
+                                if(prev_brightness != brightness) {
+                                    while(paused) {
+                                        TimeUnit.MILLISECONDS.sleep(10);
+                                    }
+
+                                    paused = true;
+                                    int last_on = LastOn; // We need to reset this after changing colors
+                                    if(last_on != current_zone) {
+                                        LightsOn(current_zone);
+                                    }
+
+                                    byte[] messageBA = new byte[3];
+                                    messageBA[0] = 78;
+                                    messageBA[1] = (byte)(brightness);
+                                    messageBA[2] = 85;
+
+                                    try {
+                                        UDPC.sendMessage(messageBA);
+                                    } catch (IOException e) {
+                                        e.printStackTrace();
+                                    }
+                                    
+                                    if(last_on != current_zone) {
+                                    LightsOn(last_on);
+                                    }
+                                    paused = false;
+                                    appState.setBrighness(zoneid, brightness);
+                                }
+                            } catch(IllegalArgumentException e) {
+
+                            }
+
+                            TimeUnit.MILLISECONDS.sleep(split_interval);
+
+                            index = index + 1;
+                        }
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+        thread.start();
+    }
+
+    public void stopFadeEffect(final int zoneid) {
+        wakeLock.release();
+        looping[zoneid] = false;
+        overlapping[zoneid] = false;
     }
 }
