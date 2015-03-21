@@ -111,7 +111,7 @@ public class controller extends ActionBarActivity {
 
     private DrawerFrameLayout drawer;
 
-    public static String[] effects = {"aurora", "fire", "cherry"};
+    public static String[] effects = {"aurora", "fire", "cherry", "forest"};
     private static String currentEffect = "";
 
     @Override
