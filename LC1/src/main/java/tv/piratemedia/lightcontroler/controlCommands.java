@@ -53,6 +53,7 @@ public class controlCommands {
     public boolean paused = false;
     public boolean[] looping = {false, false, false, false, false};
     public boolean[] overlapping = {false, false, false, false, false};
+    public int[] current_brightness = {100, 100, 100, 100, 100};
 
     public float BrightnessPercent = 1f;
     
@@ -890,6 +891,7 @@ public class controlCommands {
                             try {
                                 if(brightnesses.get(index) > 0) {
                                     brightness = (int) (BrightnessPercent * brightnesses.get(index) / 4);
+                                    current_brightness[current_zone] = brightness * 4;
                                 }
 
                                 if(prev_brightness != brightness) {
@@ -941,5 +943,33 @@ public class controlCommands {
         wakeLock.release();
         looping[zoneid] = false;
         overlapping[zoneid] = false;
+        try {
+            TimeUnit.MILLISECONDS.sleep(200);
+
+            byte[] messageBA = new byte[3];
+            messageBA[0] = 78;
+            messageBA[1] = (byte)((int) (current_brightness[zoneid] / 4));
+            messageBA[2] = 85;
+
+            try {
+                UDPC.sendMessage(messageBA);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+
+            TimeUnit.MILLISECONDS.sleep(200);
+            
+            setToWhite(zoneid);
+
+            TimeUnit.MILLISECONDS.sleep(200);
+
+            try {
+                UDPC.sendMessage(messageBA);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        } catch(InterruptedException e) {
+
+        }
     }
 }
