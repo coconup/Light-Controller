@@ -237,6 +237,13 @@
                         android:id="@+id/cherry_mode"
                         android:text="Start Cherry Mode" />
 
+                    <Button
+                        style="@style/ButtonLightController"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:id="@+id/forest_mode"
+                        android:text="Start Forest Mode" />
+
                 </LinearLayout>
 
             </LinearLayout>
