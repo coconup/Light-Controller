@@ -111,6 +111,9 @@ public class controller extends ActionBarActivity {
 
     private DrawerFrameLayout drawer;
 
+    public static String[] effects = {"aurora", "fire", "cherry"};
+    private static String currentEffect = "";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -722,6 +725,16 @@ public class controller extends ActionBarActivity {
         public RGBWFragment() {
         }
 
+        public void toggleEffect(final String effect) {
+            if(currentEffect != effect) {
+                currentEffect = effect;
+                Controller.startFadeEffect(getArguments().getInt(ARG_SECTION_NUMBER), effect);
+            } else {
+                currentEffect = "";
+                Controller.stopFadeEffect(getArguments().getInt(ARG_SECTION_NUMBER));
+            }
+        }
+
         @Override
         public View onCreateView(LayoutInflater inflater, ViewGroup container,
                 Bundle savedInstanceState) {
@@ -935,6 +948,23 @@ public class controller extends ActionBarActivity {
                         }
                     }
                 });
+
+                for(final String effect: effects) {
+                    int resId = getResources().getIdentifier(effect + "_mode", "id", "tv.piratemedia.lightcontroler");
+                    final Button btn = (Button) rootView.findViewById(resId);
+
+                    btn.setOnClickListener(new View.OnClickListener() {
+                        @Override
+                        public void onClick(View v) {
+                            toggleEffect(effect);
+                            if(currentEffect == effect) {
+                                btn.setText("Stop " + effect + " Mode");
+                            } else {
+                                btn.setText("Start " + effect + " Mode");
+                            }
+                        }
+                    });
+                }
 
                 recreateView = true;
                 cacheView = rootView;
