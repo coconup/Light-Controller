@@ -726,6 +726,14 @@ public class controlCommands {
                         smooth_brightness = true;
                         max_brightness_spread = 10;
                         overlap_effects = false;
+                    } else if (effect == "forest") {
+                        color_range_min = 55;
+                        color_range_max = 130;
+                        brightness_range_min = 60;
+                        brightness_range_max = 100;
+                        interval = 200;
+                        smooth_brightness = true;
+                        overlap_effects = false;
                     }
 
                     int current_zone = zoneid;
