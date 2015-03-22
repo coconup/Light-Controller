@@ -421,7 +421,7 @@ public class controlCommands {
     }
 
     private int[] values = {2,3,4,5,8,9,10,11,13,14,15,16,17,18,19,20,21,23,24,25};
-    private int LastBrightness = 20;
+    private int LastBrightness = 19;
     private int LastZone = 0;
     private boolean finalSend = false;
     public boolean touching = false;
@@ -455,7 +455,7 @@ public class controlCommands {
         LastBrightness = brightness;
         LastZone = zoneid;
         
-        BrightnessPercent = (float) values[brightness] / 25;
+        BrightnessPercent = (float) brightness / (values.length - 1);
     }
 
     public void startTimeout() {
@@ -685,8 +685,8 @@ public class controlCommands {
             int brightness_start;
             int brightness_end;
             int brightness;
-            int prev_brightness = -1;
-            double rand;
+            int prev_brightness_index = -1;
+            int rand;
 
             int color_range_min = 120;
             int color_range_max = 210;
@@ -703,7 +703,7 @@ public class controlCommands {
                     if(effect == "aurora") {
                         color_range_min = 80;
                         color_range_max = 210;
-                        brightness_range_min = 60;
+                        brightness_range_min = 90;
                         brightness_range_max = 100;
                         interval = 300;
                         smooth_brightness = true;
@@ -721,7 +721,7 @@ public class controlCommands {
                     } else if (effect == "cherry") {
                         color_range_min = 270;
                         color_range_max = 300;
-                        brightness_range_min = 80;
+                        brightness_range_min = 95;
                         brightness_range_max = 100;
                         interval = 600;
                         smooth_brightness = true;
@@ -730,7 +730,7 @@ public class controlCommands {
                     } else if (effect == "forest") {
                         color_range_min = 55;
                         color_range_max = 130;
-                        brightness_range_min = 60;
+                        brightness_range_min = 80;
                         brightness_range_max = 100;
                         interval = 200;
                         smooth_brightness = true;
@@ -739,18 +739,20 @@ public class controlCommands {
 
                     int current_zone = zoneid;
 
+                    appState.setColor(zoneid, (int) ((color_range_min + color_range_max) / 2));
+
                     while(looping[current_zone]) {
+
+                        rand = (int) Math.round(Math.random() * (color_range_max - color_range_min) + color_range_min);
 
                         // We create an array of colors
                         if(fade_end > 0) {
                             fade_start = fade_end;
                         } else {
-                            rand = (Math.random() * (color_range_max - color_range_min) + color_range_min);
-                            fade_start = (int) rand;
+                            fade_start = rand;
                         }
 
-                        rand = (Math.random() * (color_range_max - color_range_min) + color_range_min);
-                        fade_end = (int) rand;
+                        fade_end = rand;
 
                         if(fade_end == fade_start) {
                             fade_end = fade_end + 1;
@@ -761,16 +763,16 @@ public class controlCommands {
 
                         int colors_length = (color_max - color_min + 1);
 
+                        rand = (int) Math.round(Math.random() * (brightness_range_max - brightness_range_min) + brightness_range_min);
+
                         // We create an array of brightness levels
                         if(brightness_end > 0) {
                             brightness_start = brightness_end;
                         } else {
-                            rand = (Math.random() * (brightness_range_max - brightness_range_min) + brightness_range_min);
-                            brightness_start = (int) rand;
+                            brightness_start = rand;
                         }
-
-                        rand = (Math.random() * (brightness_range_max - brightness_range_min) + brightness_range_min);
-                        brightness_end = (int) rand;
+                        
+                        brightness_end = rand;
 
                         if(brightness_end == brightness_start) {
                             if(brightness_end < 100) {
@@ -781,7 +783,7 @@ public class controlCommands {
                         }
 
                         if(smooth_brightness) {
-                            max_brightness_spread = Math.min((int) (colors_length * 1.5), max_brightness_spread); // At most we want the brightness to fade 1.5 times as fast than colors
+                            max_brightness_spread = Math.min((int) Math.round(colors_length * 1.5), max_brightness_spread); // At most we want the brightness to fade 1.5 times as fast than colors
 
                             if (brightness_end > brightness_start) {
                                 brightness_end = Math.min(brightness_end, brightness_start + max_brightness_spread);
@@ -803,8 +805,8 @@ public class controlCommands {
 
                         for(i = color_min; i <= color_max; i += 1) {
                             colors.add(i);
-                            brightnesses.add((int) b);
-                            b = b + brightness_steps;
+                            brightnesses.add((int) Math.round(b));
+                            b = Math.min(b + brightness_steps, (float) brightness_max);
                         }
 
                         if (fade_end < fade_start) {
@@ -861,6 +863,7 @@ public class controlCommands {
                                 int last_on = LastOn; // We need to reset this after changing colors
                                 if(last_on != current_zone) {
                                     LightsOn(current_zone);
+                                    TimeUnit.MILLISECONDS.sleep(50);
                                 }
 
                                 byte[] messageBA = new byte[3];
@@ -876,11 +879,10 @@ public class controlCommands {
                                 }
 
                                 if(last_on != current_zone) {
+                                    TimeUnit.MILLISECONDS.sleep(50);
                                     LightsOn(last_on);
                                 }
                                 paused = false;
-
-                                appState.setColor(zoneid, color);
 
                             } catch(IllegalArgumentException e) {
 
@@ -889,12 +891,15 @@ public class controlCommands {
                             TimeUnit.MILLISECONDS.sleep(split_interval);
 
                             try {
+                                int brightness_index = prev_brightness_index;
+
                                 if(brightnesses.get(index) > 0) {
-                                    brightness = (int) (BrightnessPercent * brightnesses.get(index) / 4);
-                                    current_brightness[current_zone] = brightness * 4;
+                                    brightness = (int) Math.round(BrightnessPercent * brightnesses.get(index)); // Brightness values are 1-100
+                                    current_brightness[current_zone] = brightness;
+                                    brightness_index = (int) Math.round(brightness / 5f) - 1;
                                 }
 
-                                if(prev_brightness != brightness) {
+                                if(prev_brightness_index != brightness_index) {
                                     while(paused) {
                                         TimeUnit.MILLISECONDS.sleep(10);
                                     }
@@ -903,11 +908,12 @@ public class controlCommands {
                                     int last_on = LastOn; // We need to reset this after changing colors
                                     if(last_on != current_zone) {
                                         LightsOn(current_zone);
+                                        TimeUnit.MILLISECONDS.sleep(50);
                                     }
 
                                     byte[] messageBA = new byte[3];
                                     messageBA[0] = 78;
-                                    messageBA[1] = (byte)(brightness);
+                                    messageBA[1] = (byte)(values[brightness_index]);
                                     messageBA[2] = 85;
 
                                     try {
@@ -917,11 +923,14 @@ public class controlCommands {
                                     }
                                     
                                     if(last_on != current_zone) {
-                                    LightsOn(last_on);
+                                        TimeUnit.MILLISECONDS.sleep(50);
+                                        LightsOn(last_on);
                                     }
                                     paused = false;
-                                    appState.setBrighness(zoneid, brightness);
                                 }
+
+                                prev_brightness_index = brightness_index;
+
                             } catch(IllegalArgumentException e) {
 
                             }
@@ -946,9 +955,11 @@ public class controlCommands {
         try {
             TimeUnit.MILLISECONDS.sleep(200);
 
+            int brightness_index = Math.min(19, Math.max(0, (int) Math.ceil(current_brightness[zoneid] / 5) - 1));
+
             byte[] messageBA = new byte[3];
             messageBA[0] = 78;
-            messageBA[1] = (byte)((int) (current_brightness[zoneid] / 4));
+            messageBA[1] = (byte)(values[brightness_index]);
             messageBA[2] = 85;
 
             try {
