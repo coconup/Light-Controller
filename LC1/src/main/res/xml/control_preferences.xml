@@ -2,6 +2,11 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
 
     <PreferenceCategory android:title="@string/cat_head" >
+        <CheckBoxPreference
+            android:title="@string/disable_discovery_title"
+            android:summary="@string/disable_discovery_summary"
+            android:key="pref_disable_auto_find"
+            android:defaultValue="false"/>
         <EditTextPreference
             android:title="@string/ip_head"
             android:summary="@string/ip_summary"
@@ -84,6 +89,16 @@
                 android:key="pref_zone8"
                 android:defaultValue="@string/Zone4"/>
         </PreferenceScreen>
+    </PreferenceCategory>
+    <PreferenceCategory android:title="@string/cat_wear">
+        <Preference
+            android:title="@string/pref_wear_settings"
+            android:summary="@string/pref_wear_settings_desc">
+            <intent
+                android:action="android.intent.action.main"
+                android:targetClass="tv.piratemedia.lightcontroler.wear.WearSettings"
+                android:targetPackage="tv.piratemedia.lightcontroler"/>
+        </Preference>
     </PreferenceCategory>
     <PreferenceCategory android:title="@string/cat_api">
         <Preference

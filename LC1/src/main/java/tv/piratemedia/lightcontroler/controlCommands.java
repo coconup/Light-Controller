@@ -19,22 +19,18 @@ package tv.piratemedia.lightcontroler;
 
 import android.content.Context;
 import android.graphics.Color;
-import android.media.AudioManager;
 import android.media.MediaRecorder;
 import android.os.Handler;
+import android.os.PowerManager;
 import android.util.Log;
 
 import java.io.File;
-import java.io.FileDescriptor;
-import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.Random;
-import java.util.concurrent.TimeUnit;
-
 import java.util.ArrayList;
 import java.util.Collections;
-import android.os.PowerManager;
+import java.util.Random;
+import java.util.concurrent.TimeUnit;
 
 public class controlCommands {
     public static final int DISCOVERED_DEVICE = 111;
@@ -50,13 +46,13 @@ public class controlCommands {
     public final int[] tolerance = new int[1];
     public SaveState appState = null;
 
+    private boolean going_to_sleep = false;
     public boolean paused = false;
     public boolean[] looping = {false, false, false, false, false};
     public boolean[] overlapping = {false, false, false, false, false};
     public int[] current_brightness = {100, 100, 100, 100, 100};
-
     public float BrightnessPercent = 1f;
-    
+
     private PowerManager powerManager;
     private PowerManager.WakeLock wakeLock;
 
@@ -421,7 +417,7 @@ public class controlCommands {
     }
 
     private int[] values = {2,3,4,5,8,9,10,11,13,14,15,16,17,18,19,20,21,23,24,25};
-    private int LastBrightness = 19;
+    private int LastBrightness = 20;
     private int LastZone = 0;
     private boolean finalSend = false;
     public boolean touching = false;
@@ -454,7 +450,7 @@ public class controlCommands {
         }
         LastBrightness = brightness;
         LastZone = zoneid;
-        
+        current_brightness[zoneid] = (brightness + 1) * 5;
         BrightnessPercent = (float) brightness / (values.length - 1);
     }
 
@@ -673,11 +669,113 @@ public class controlCommands {
         return 0;
     }
 
+    public void goToSleep(final int zoneid) {
+        going_to_sleep = true;
+        LightsOn(zoneid);
+        wakeLock.acquire();
+
+        Thread thread = new Thread(new Runnable()
+        {
+            public void run() {
+                try {
+                    int i = 0;
+
+                    int current_zone = zoneid;
+
+                    looping[current_zone] = true;
+
+                    ArrayList<Integer> brightnesses = new ArrayList<Integer>();
+
+                    int brightness_index = Math.min(19, Math.max(0, (int) Math.ceil(current_brightness[zoneid] / 5) - 1));
+
+                    for(i = brightness_index; i > 0; i = i - 1) {
+                        brightnesses.add(i);
+                    }
+
+                    final int split_interval = (int) 15000; // 5 minutes max if current brightness is 100%
+
+                    for(Integer brightness: brightnesses){
+                        if(!looping[current_zone]) {
+                            going_to_sleep = false;
+                            break;
+                        }
+
+                        try {
+                            while(paused) {
+                                TimeUnit.MILLISECONDS.sleep(10);
+                            }
+
+                            paused = true;
+                            int last_on = LastOn; // We need to reset this after changing colors
+                            if(last_on != current_zone) {
+                                TimeUnit.MILLISECONDS.sleep(50);
+                                LightsOn(current_zone);
+                                TimeUnit.MILLISECONDS.sleep(50);
+                            }
+
+                            byte[] messageBA = new byte[3];
+                            messageBA[0] = 78;
+                            messageBA[1] = (byte)(values[brightness]);
+                            messageBA[2] = 85;
+
+                            try {
+                                UDPC.sendMessage(messageBA);
+                            } catch (IOException e) {
+                                e.printStackTrace();
+                            }
+
+                            if(last_on != current_zone) {
+                                TimeUnit.MILLISECONDS.sleep(50);
+                                LightsOn(last_on);
+                                TimeUnit.MILLISECONDS.sleep(50);
+                            }
+                            paused = false;
+
+                            current_brightness[current_zone] = (brightness + 1) * 5;
+
+                        } catch(IllegalArgumentException e) {
+
+                        }
+
+                        TimeUnit.MILLISECONDS.sleep(split_interval);
+                    }
+
+                    while(paused) {
+                        TimeUnit.MILLISECONDS.sleep(10);
+                    }
+
+                    paused = true;
+
+                    TimeUnit.MILLISECONDS.sleep(100);
+
+                    stopFadeEffect(current_zone, "night");
+
+                    TimeUnit.MILLISECONDS.sleep(100);
+
+                    LightsOff(current_zone);
+
+                    paused = false;
+
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }
+        });
+        thread.start();
+    }
+
     public void startFadeEffect(final int zoneid, final String effect) {
+        if(effect == "gotosleep") {
+            goToSleep(zoneid);
+            return;
+        }
+
+        stopFadeEffect(zoneid);
+
         looping[zoneid] = true;
         LightsOn(zoneid);
         wakeLock.acquire();
-        
+
         Thread thread = new Thread(new Runnable()
         {
             int fade_start;
@@ -703,15 +801,15 @@ public class controlCommands {
                     if(effect == "aurora") {
                         color_range_min = 80;
                         color_range_max = 210;
-                        brightness_range_min = 90;
+                        brightness_range_min = 100;
                         brightness_range_max = 100;
                         interval = 300;
                         smooth_brightness = true;
-                        max_brightness_spread = 10;
+                        max_brightness_spread = 0;
                         overlap_effects = false;
                     } else if (effect == "fire") {
-                        color_range_min = 10;
-                        color_range_max = 30;
+                        color_range_min = 12;
+                        color_range_max = 28;
                         brightness_range_min = 70;
                         brightness_range_max = 100;
                         interval = 100;
@@ -733,6 +831,14 @@ public class controlCommands {
                         brightness_range_min = 80;
                         brightness_range_max = 100;
                         interval = 200;
+                        smooth_brightness = true;
+                        overlap_effects = false;
+                    } else if (effect == "sunset") {
+                        color_range_min = 15;
+                        color_range_max = 45;
+                        brightness_range_min = 100;
+                        brightness_range_max = 100;
+                        interval = 800;
                         smooth_brightness = true;
                         overlap_effects = false;
                     }
@@ -771,7 +877,7 @@ public class controlCommands {
                         } else {
                             brightness_start = rand;
                         }
-                        
+
                         brightness_end = rand;
 
                         if(brightness_end == brightness_start) {
@@ -845,7 +951,7 @@ public class controlCommands {
                             try {
                                 // setColor(current_zone, Color.parseColor(newColor));
 
-                                
+
 
                                 Float deg = (float) Math.toRadians(-color);
                                 Float dec = (deg/((float)Math.PI*2f))*255f;
@@ -862,6 +968,7 @@ public class controlCommands {
                                 paused = true;
                                 int last_on = LastOn; // We need to reset this after changing colors
                                 if(last_on != current_zone) {
+                                    TimeUnit.MILLISECONDS.sleep(50);
                                     LightsOn(current_zone);
                                     TimeUnit.MILLISECONDS.sleep(50);
                                 }
@@ -881,6 +988,7 @@ public class controlCommands {
                                 if(last_on != current_zone) {
                                     TimeUnit.MILLISECONDS.sleep(50);
                                     LightsOn(last_on);
+                                    TimeUnit.MILLISECONDS.sleep(50);
                                 }
                                 paused = false;
 
@@ -899,7 +1007,7 @@ public class controlCommands {
                                     brightness_index = (int) Math.round(brightness / 5f) - 1;
                                 }
 
-                                if(prev_brightness_index != brightness_index) {
+                                if(prev_brightness_index != brightness_index && !going_to_sleep) {
                                     while(paused) {
                                         TimeUnit.MILLISECONDS.sleep(10);
                                     }
@@ -907,6 +1015,7 @@ public class controlCommands {
                                     paused = true;
                                     int last_on = LastOn; // We need to reset this after changing colors
                                     if(last_on != current_zone) {
+                                        TimeUnit.MILLISECONDS.sleep(50);
                                         LightsOn(current_zone);
                                         TimeUnit.MILLISECONDS.sleep(50);
                                     }
@@ -921,10 +1030,11 @@ public class controlCommands {
                                     } catch (IOException e) {
                                         e.printStackTrace();
                                     }
-                                    
+
                                     if(last_on != current_zone) {
                                         TimeUnit.MILLISECONDS.sleep(50);
                                         LightsOn(last_on);
+                                        TimeUnit.MILLISECONDS.sleep(50);
                                     }
                                     paused = false;
                                 }
@@ -949,35 +1059,38 @@ public class controlCommands {
     }
 
     public void stopFadeEffect(final int zoneid) {
-        wakeLock.release();
-        looping[zoneid] = false;
-        overlapping[zoneid] = false;
+        stopFadeEffect(zoneid, "white");
+    }
+
+    public void stopFadeEffect(final int zoneid, final String fade_to) {
+        if(looping[zoneid] == true) {
+            wakeLock.release();
+            looping[zoneid] = false;
+            overlapping[zoneid] = false;
+            going_to_sleep = false;
+        }
         try {
             TimeUnit.MILLISECONDS.sleep(200);
 
-            int brightness_index = Math.min(19, Math.max(0, (int) Math.ceil(current_brightness[zoneid] / 5) - 1));
+            if(fade_to == "night") {
+                setToNight(zoneid);
+            } else if(fade_to == "white") {
+                setToWhite(zoneid);
 
-            byte[] messageBA = new byte[3];
-            messageBA[0] = 78;
-            messageBA[1] = (byte)(values[brightness_index]);
-            messageBA[2] = 85;
+                TimeUnit.MILLISECONDS.sleep(200);
 
-            try {
-                UDPC.sendMessage(messageBA);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+                int brightness_index = Math.min(19, Math.max(0, (int) Math.ceil(current_brightness[zoneid] / 5) - 1));
 
-            TimeUnit.MILLISECONDS.sleep(200);
-            
-            setToWhite(zoneid);
+                byte[] messageBA = new byte[3];
+                messageBA[0] = 78;
+                messageBA[1] = (byte)(values[brightness_index]);
+                messageBA[2] = 85;
 
-            TimeUnit.MILLISECONDS.sleep(200);
-
-            try {
-                UDPC.sendMessage(messageBA);
-            } catch (IOException e) {
-                e.printStackTrace();
+                try {
+                    UDPC.sendMessage(messageBA);
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
             }
         } catch(InterruptedException e) {
 

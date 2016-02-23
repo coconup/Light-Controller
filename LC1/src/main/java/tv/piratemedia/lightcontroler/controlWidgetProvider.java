@@ -21,14 +21,12 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
-import android.appwidget.AppWidgetProviderInfo;
 import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
-import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.IBinder;
@@ -231,7 +229,7 @@ public class controlWidgetProvider extends AppWidgetProvider {
             pendingIntent = PendingIntent.getActivity(context, 0, intent, 0);
             remoteViews.setOnClickPendingIntent(R.id.app, pendingIntent);
 
-            if(HeightList.containsKey(widgetId) && HeightList.get(widgetId) < 120) {
+            if(HeightList.containsKey(widgetId) && HeightList.get(widgetId) < context.getResources().getDimensionPixelSize(R.dimen.widget_no_clock)) {
                 Log.d("widget", "Hide Date Time");
                 remoteViews.setViewVisibility(R.id.datetime, View.GONE);
             } else {

@@ -167,6 +167,16 @@
             </intent-filter>
         </receiver>
 
+        <receiver
+            android:name=".api.AppReciever"
+            android:permission="tv.piratemedia.lightcontroler.api">
+            <intent-filter>
+                <category android:name="android.intent.category.DEFAULT" />
+                <action android:name="android.intent.action.PACKAGE_REMOVED" />
+                <data android:scheme="package" />
+            </intent-filter>
+        </receiver>
+
         <provider
             android:authorities="tv.piratemedia.lightcontroler.api"
             android:name=".api.APIProvider"
@@ -181,6 +191,6 @@
         android:name="tv.piratemedia.lightcontroler.api"
         android:description="@string/api_description"
         android:label="@string/api_name"
-        android:protectionLevel="signature"
+        android:protectionLevel="normal"
     />
 </manifest>

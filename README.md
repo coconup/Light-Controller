@@ -5,12 +5,10 @@ Light Controller
 
 Description
 -----------
-
-Attempt to replicate light effects seen in Philips Hue or Avea Light on Mi-Light, LimitlessLED and similar. Based on the Light-Controller project by Eliot Stocker.
-
 The best way to control your LED Bulbs, Including Home and Lockscreen widgets
 
-Cant wait for new releases of light controller? join the beta here: https://plus.google.com/u/0/communities/117265785994204078301
+New Light Controller API Availabel here:
+http://eliotstocker.github.io/Light-ControllerAPI
 
 UPDATED: Now Controls your Dual White Bulbs for 4 More Zones.
 
